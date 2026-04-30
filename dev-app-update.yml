@@ -1,0 +1,4 @@
+provider: github
+owner: arnoldhao
+repo: hush
+updaterCacheDirName: hush-updater

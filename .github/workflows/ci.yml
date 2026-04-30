@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  ci:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  package-preview:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(toJson(github.event.pull_request.labels), 'preview-binaries')
+    needs: ci
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            platform: macos
+            arch: universal
+            artifact_name: preview-macos-universal
+            artifact_suffix: macos-universal
+          - runner: windows-latest
+            platform: windows
+            arch: x64
+            artifact_name: preview-windows-x64
+            artifact_suffix: windows-x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      TELEMETRYDECK_APP_ID: ${{ secrets.TELEMETRYDECK_APP_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve preview metadata
+        shell: bash
+        run: |
+          head_sha="${{ github.event.pull_request.head.sha }}"
+          echo "PREVIEW_ID=pr${{ github.event.pull_request.number }}-${head_sha::7}" >> "$GITHUB_ENV"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Package preview app (macOS)
+        if: matrix.platform == 'macos'
+        run: npx electron-builder --mac --${{ matrix.arch }} --publish never
+
+      - name: Package preview app (Windows)
+        if: matrix.platform == 'windows'
+        run: npx electron-builder --win --${{ matrix.arch }} --publish never
+
+      - name: Verify native module (macOS)
+        if: matrix.platform == 'macos'
+        run: node scripts/verify-native-module.mjs darwin ${{ matrix.arch }}
+
+      - name: Verify native module (Windows)
+        if: matrix.platform == 'windows'
+        run: node scripts/verify-native-module.mjs win32 ${{ matrix.arch }}
+
+      - name: Prepare preview artifact names
+        shell: bash
+        run: |
+          mkdir -p preview-dist
+          cp -R dist/* preview-dist/ || true
+
+      - name: Upload preview artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: preview-dist/*
+          if-no-files-found: error
+
+  weekly-regression:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

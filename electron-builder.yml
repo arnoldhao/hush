@@ -1,0 +1,59 @@
+appId: com.dreamapp.hush
+productName: Hush
+directories:
+  buildResources: build
+electronLanguages:
+  - en-US
+  - zh-CN
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!images/**'
+  - '!scripts/**'
+  - '!README_zh-CN.md'
+  - '!**/*.map'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!node_modules/better-sqlite3/deps/**'
+  - '!node_modules/better-sqlite3/src/**'
+asarUnpack:
+  - resources/**
+  - node_modules/better-sqlite3/build/Release/*.node
+win:
+  executableName: Hush
+  artifactName: ${name}-windows-${arch}-${version}.${ext}
+nsis:
+  artifactName: ${name}-windows-${arch}-${version}-setup.${ext}
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  runAfterFinish: false
+  menuCategory: Hush
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  target:
+    - dmg
+    - zip
+  artifactName: ${name}-macos-${arch}-${version}.${ext}
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+dmg:
+  artifactName: ${name}-macos-${arch}-${version}.${ext}
+linux:
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: Arnold HAO
+  category: Utility
+appImage:
+  artifactName: ${name}-linux-${arch}-${version}.${ext}
+npmRebuild: true
+publish:
+  provider: github
+  owner: arnoldhao
+  repo: hush

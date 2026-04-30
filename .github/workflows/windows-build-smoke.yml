@@ -1,0 +1,38 @@
+name: Windows Build Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or SHA to build. Leave empty to use the selected branch.
+        required: false
+        type: string
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  windows-build-smoke:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Windows build smoke
+        run: |
+          npm run build
+          npx electron-builder --win --x64 --dir
+
+      - name: Verify native module
+        run: node scripts/verify-native-module.mjs win32 x64

@@ -1,0 +1,105 @@
+name: Release Windows
+
+on:
+  workflow_run:
+    workflows: ['Publish Release']
+    types: [completed]
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  release-windows:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      TELEMETRYDECK_APP_ID: ${{ secrets.TELEMETRYDECK_APP_ID }}
+    steps:
+      - name: Resolve release metadata
+        id: release_info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            if (!run) throw new Error('workflow_run payload is missing');
+            const { owner, repo } = context.repo;
+            const headSha = (run.head_sha || '').trim();
+            const headBranch = (run.head_branch || '').trim();
+            const commitishCandidates = new Set([headSha, headBranch, headBranch ? `refs/heads/${headBranch}` : ''].filter(Boolean));
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            let matchedRelease = null;
+            for (let attempt = 1; attempt <= 6; attempt += 1) {
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+              matchedRelease = releases
+                .filter((release) => !release.draft)
+                .sort((left, right) => Date.parse(right.published_at || right.created_at || 0) - Date.parse(left.published_at || left.created_at || 0))
+                .find((release) => commitishCandidates.has((release.target_commitish || '').trim()));
+              if (matchedRelease) break;
+              core.info(`No published release matched commitish ${Array.from(commitishCandidates).join(', ')} on attempt ${attempt}/6`);
+              if (attempt < 6) await sleep(5000);
+            }
+            if (!matchedRelease) throw new Error(`No published release found for commit ${headSha}`);
+            core.setOutput('tag_name', matchedRelease.tag_name);
+            core.setOutput('version', matchedRelease.tag_name.replace(/^v/, ''));
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release_info.outputs.tag_name }}
+
+      - name: Resolve version from tag
+        shell: bash
+        run: |
+          version="${{ steps.release_info.outputs.version }}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Sync package version
+        run: npm version "$env:VERSION" --no-git-tag-version --allow-same-version
+        shell: pwsh
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Package app (Windows)
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Verify native module
+        run: node scripts/verify-native-module.mjs win32 x64
+
+      - name: SHA256
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -FilePath "$($_.FullName).sha256" -Encoding ascii -NoNewline
+          }
+
+      - name: List dist artifacts
+        shell: pwsh
+        run: Get-ChildItem dist | Format-Table Name,Length,LastWriteTime
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Release upload
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,111 @@
+name: Release macOS
+
+on:
+  workflow_run:
+    workflows: ['Publish Release']
+    types: [completed]
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  release-macos:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: write
+    runs-on: macos-26
+    env:
+      TELEMETRYDECK_APP_ID: ${{ secrets.TELEMETRYDECK_APP_ID }}
+    steps:
+      - name: Resolve release metadata
+        id: release_info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            if (!run) throw new Error('workflow_run payload is missing');
+            const { owner, repo } = context.repo;
+            const headSha = (run.head_sha || '').trim();
+            const headBranch = (run.head_branch || '').trim();
+            const commitishCandidates = new Set([headSha, headBranch, headBranch ? `refs/heads/${headBranch}` : ''].filter(Boolean));
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            let matchedRelease = null;
+            for (let attempt = 1; attempt <= 6; attempt += 1) {
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+              matchedRelease = releases
+                .filter((release) => !release.draft)
+                .sort((left, right) => Date.parse(right.published_at || right.created_at || 0) - Date.parse(left.published_at || left.created_at || 0))
+                .find((release) => commitishCandidates.has((release.target_commitish || '').trim()));
+              if (matchedRelease) break;
+              core.info(`No published release matched commitish ${Array.from(commitishCandidates).join(', ')} on attempt ${attempt}/6`);
+              if (attempt < 6) await sleep(5000);
+            }
+            if (!matchedRelease) throw new Error(`No published release found for commit ${headSha}`);
+            core.setOutput('tag_name', matchedRelease.tag_name);
+            core.setOutput('version', matchedRelease.tag_name.replace(/^v/, ''));
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release_info.outputs.tag_name }}
+
+      - name: Resolve version from tag
+        shell: bash
+        run: |
+          version="${{ steps.release_info.outputs.version }}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Sync package version
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Package app (macOS)
+        run: npx electron-builder --mac --universal --publish never
+
+      - name: Verify native module
+        run: node scripts/verify-native-module.mjs darwin universal
+
+      - name: Inspect macOS build metadata
+        shell: bash
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --show-sdk-version --sdk macosx
+          find dist -maxdepth 1 -type f -print
+
+      - name: SHA256
+        shell: bash
+        run: |
+          find dist -maxdepth 1 -type f -print0 | while IFS= read -r -d '' file; do
+            shasum -a 256 "$file" > "$file.sha256"
+          done
+
+      - name: List dist artifacts
+        shell: bash
+        run: ls -la dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts-universal
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Release upload
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
