@@ -1,6 +1,6 @@
 import type { LiveChannelInput } from './live'
 
-export const LIVE_CATALOG_MANIFEST_URL = 'https://updates.dreamapp.cc/xiadown/manifest.json'
+export const LIVE_CATALOG_MANIFEST_URL = 'https://updates.dreamapp.cc/hush/manifest.json'
 
 export const DEFAULT_LIVE_CHANNELS: LiveChannelInput[] = [
   {
