@@ -39,10 +39,30 @@ mac:
     - dmg
     - zip
   artifactName: ${name}-macos-${arch}-${version}.${ext}
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
 dmg:
   artifactName: ${name}-macos-${arch}-${version}.${ext}
+  background: build/dmg-background.png
+  iconSize: 80
+  iconTextSize: 12
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 132
+      y: 154
+      type: file
+    - x: 408
+      y: 154
+      type: link
+      path: /Applications
+    - x: 270
+      y: 280
+      type: file
+      path: build/dmg-readme.txt
+      name: Read Me.txt
 linux:
   target:
     - AppImage
