@@ -44,18 +44,18 @@
 
 ### 下载安装
 
-下载地址会在发布构建可用后补充到下表；历史版本可见 [GitHub 发布页](https://github.com/arnoldhao/hush/releases)。
+可直接下载最新安装包或压缩包；历史版本可见 [GitHub 发布页](https://github.com/arnoldhao/hush/releases)。
 
-| 平台    | 架构      | 形式   | 下载 |
-| ------- | --------- | ------ | ---- |
-| macOS   | Universal | 压缩包 |      |
-| Windows | x64       | 安装版 |      |
-| Windows | x64       | 便携版 |      |
+| 平台    | 架构               | 形式   | 下载                                                                                         |
+| ------- | ------------------ | ------ | -------------------------------------------------------------------------------------------- |
+| macOS   | Apple 芯片 / Intel | DMG    | [点击下载](https://updates.dreamapp.cc/hush/downloads/hush-macos-universal-latest.dmg)       |
+| macOS   | Apple 芯片 / Intel | 压缩包 | [点击下载](https://updates.dreamapp.cc/hush/downloads/hush-macos-universal-latest.zip)       |
+| Windows | x64                | 安装版 | [点击下载](https://updates.dreamapp.cc/hush/downloads/hush-windows-x64-latest-installer.exe) |
 
 ### 首次打开
 
-1. `macOS`：解压后将 `Hush.app` 移动到“应用程序”目录。若系统提示“无法打开”或“已损坏”，请在终端执行 `sudo xattr -rd com.apple.quarantine /Applications/Hush.app`。
-2. `Windows`：安装版直接运行 `.exe`；便携版解压后直接启动。若首次启动出现 SmartScreen，选择“更多信息 -> 仍要运行”。
+1. `macOS`：打开 DMG 或解压压缩包后，将 `Hush.app` 移动到“应用程序”目录。若系统提示“无法打开”或“已损坏”，请在终端执行 `sudo xattr -rd com.apple.quarantine /Applications/Hush.app`。
+2. `Windows`：直接运行 `.exe` 安装包。若首次启动出现 SmartScreen，选择“更多信息 -> 仍要运行”。
 3. 放空首次启动会默认进入直播播放器。你可以在设置中完成语言、外观、代理、菜单栏或托盘行为和更新偏好配置，然后从内置频道开始播放，或添加自己的 YouTube Live 链接。
 
 ## 感谢

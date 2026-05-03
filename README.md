@@ -44,18 +44,18 @@ Hush grew out of the online music live-radio module in [XiaDown](https://github.
 
 ### Download and install
 
-Download links will be added below after release builds are available. Older releases will be available on [GitHub Releases](https://github.com/arnoldhao/hush/releases).
+Download the latest package directly below. Older releases are available on [GitHub Releases](https://github.com/arnoldhao/hush/releases).
 
-| Platform | Architecture | Package   | Download |
-| -------- | ------------ | --------- | -------- |
-| macOS    | Universal    | Archive   |          |
-| Windows  | x64          | Installer |          |
-| Windows  | x64          | Portable  |          |
+| Platform | Architecture          | Package   | Download                                                                                     |
+| -------- | --------------------- | --------- | -------------------------------------------------------------------------------------------- |
+| macOS    | Apple Silicon / Intel | DMG       | [Download](https://updates.dreamapp.cc/hush/downloads/hush-macos-universal-latest.dmg)       |
+| macOS    | Apple Silicon / Intel | Archive   | [Download](https://updates.dreamapp.cc/hush/downloads/hush-macos-universal-latest.zip)       |
+| Windows  | x64                   | Installer | [Download](https://updates.dreamapp.cc/hush/downloads/hush-windows-x64-latest-installer.exe) |
 
 ### First launch
 
-1. `macOS`: unzip the package and move `Hush.app` to the Applications folder. If macOS says the app cannot be opened or is damaged, run `sudo xattr -rd com.apple.quarantine /Applications/Hush.app`.
-2. `Windows`: run the `.exe` installer directly, or unzip the portable package and launch it. If SmartScreen appears on first launch, choose `More info -> Run anyway`.
+1. `macOS`: open the DMG or unzip the archive, then move `Hush.app` to the Applications folder. If macOS says the app cannot be opened or is damaged, run `sudo xattr -rd com.apple.quarantine /Applications/Hush.app`.
+2. `Windows`: run the `.exe` installer directly. If SmartScreen appears on first launch, choose `More info -> Run anyway`.
 3. Hush opens the live player by default. Use Settings to choose language, appearance, proxy, menu bar or tray behavior, and update preferences, then pick a built-in channel or add your own YouTube Live link.
 
 ## Acknowledgements
