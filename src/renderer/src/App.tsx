@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { JSX, ReactNode } from 'react'
+import type { JSX, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 
 import {
   AlertCircle,
@@ -1026,7 +1026,7 @@ function AboutTab(props: {
               </button>
             </header>
             <div className="release-notes-body">
-              <MarkdownContent markdown={releaseNotes || text.about.noReleaseNotes} />
+              <ReleaseNotesContent content={releaseNotes || text.about.noReleaseNotes} />
             </div>
             <footer className="dialog-actions">
               <button
@@ -1051,6 +1051,49 @@ type MarkdownBlock =
   | { type: 'paragraph'; content: string }
   | { type: 'quote'; content: string }
   | { type: 'rule' }
+
+const ALLOWED_RELEASE_NOTES_HTML_TAGS = new Set([
+  'a',
+  'blockquote',
+  'br',
+  'code',
+  'em',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'hr',
+  'li',
+  'ol',
+  'p',
+  'pre',
+  'strong',
+  'table',
+  'tbody',
+  'td',
+  'th',
+  'thead',
+  'tr',
+  'ul'
+])
+
+function ReleaseNotesContent(props: { content: string }): JSX.Element {
+  if (isReleaseNotesHtml(props.content)) {
+    return <HtmlContent html={props.content} />
+  }
+  return <MarkdownContent markdown={props.content} />
+}
+
+function HtmlContent(props: { html: string }): JSX.Element {
+  const sanitizedHtml = sanitizeReleaseNotesHtml(props.html)
+  return (
+    <div
+      className="markdown-content"
+      onClick={handleReleaseNotesHtmlClick}
+      dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+    />
+  )
+}
 
 function MarkdownContent(props: { markdown: string }): JSX.Element {
   const blocks = parseMarkdownBlocks(props.markdown)
@@ -1191,6 +1234,77 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
   }
 
   return blocks
+}
+
+function isReleaseNotesHtml(content: string): boolean {
+  return /<\/?(?:h[1-6]|p|ul|ol|li|a|code|pre|blockquote|table|thead|tbody|tr|th|td|hr|br|strong|em)\b/i.test(
+    content
+  )
+}
+
+function sanitizeReleaseNotesHtml(html: string): string {
+  const parser = new DOMParser()
+  const source = parser.parseFromString(html, 'text/html')
+  const target = document.implementation.createHTMLDocument('')
+  const container = target.createElement('div')
+
+  for (const child of Array.from(source.body.childNodes)) {
+    for (const safeChild of sanitizeReleaseNotesHtmlNode(child, target)) {
+      container.appendChild(safeChild)
+    }
+  }
+
+  return container.innerHTML.trim()
+}
+
+function sanitizeReleaseNotesHtmlNode(node: Node, target: Document): Node[] {
+  if (node.nodeType === 3) {
+    return [target.createTextNode(node.textContent ?? '')]
+  }
+  if (node.nodeType !== 1) {
+    return []
+  }
+
+  const element = node as Element
+  const tagName = element.tagName.toLowerCase()
+  const children = Array.from(element.childNodes).flatMap((child) =>
+    sanitizeReleaseNotesHtmlNode(child, target)
+  )
+
+  if (!ALLOWED_RELEASE_NOTES_HTML_TAGS.has(tagName)) {
+    return children
+  }
+
+  const safeElement = target.createElement(tagName)
+  if (tagName === 'a') {
+    const href = normalizeReleaseNotesHref(element.getAttribute('href') ?? '')
+    if (!href) {
+      return children
+    }
+    safeElement.setAttribute('href', href)
+    safeElement.setAttribute('rel', 'noopener noreferrer')
+  }
+
+  children.forEach((child) => safeElement.appendChild(child))
+  return [safeElement]
+}
+
+function handleReleaseNotesHtmlClick(event: ReactMouseEvent<HTMLDivElement>): void {
+  const target = event.target
+  if (!(target instanceof Element)) {
+    return
+  }
+
+  const anchor = target.closest('a')
+  if (!(anchor instanceof HTMLAnchorElement)) {
+    return
+  }
+
+  const href = normalizeReleaseNotesHref(anchor.getAttribute('href') ?? '')
+  event.preventDefault()
+  if (href) {
+    void window.api.openExternal(href)
+  }
 }
 
 function renderMarkdownInline(text: string, keyPrefix: string): ReactNode[] {
