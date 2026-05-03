@@ -115,6 +115,7 @@ export interface TextBundle {
     downloadProgress: string
     updateReady: string
     releaseNotes: string
+    viewReleaseNotes: string
     noReleaseNotes: string
     craftedBy: string
     contact: string
@@ -123,6 +124,11 @@ export interface TextBundle {
     website: string
     github: string
     sendFeedback: string
+    dreamApp: string
+    dreamCreator: string
+    dreamCreatorDescription: string
+    xiaDown: string
+    xiaDownDescription: string
   }
   live: {
     audioMode: string

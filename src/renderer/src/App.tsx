@@ -56,6 +56,8 @@ import {
 } from './styles/theme'
 
 const appIconUrl = new URL('../../../resources/icon.png', import.meta.url).href
+const dreamCreatorIconUrl = new URL('../../../resources/dreamcreator.png', import.meta.url).href
+const xiaDownIconUrl = new URL('../../../resources/xiadown.png', import.meta.url).href
 
 interface LatestVersionMeta {
   label: string
@@ -805,6 +807,7 @@ function AboutTab(props: {
   onCheckUpdates: () => void
   onInstallUpdate: () => void
 }): JSX.Element {
+  const [releaseNotesOpen, setReleaseNotesOpen] = useState(false)
   const {
     appInfo,
     text,
@@ -822,6 +825,35 @@ function AboutTab(props: {
   const updateProgress = formatUpdateProgress(updateInfo)
   const updateReady = updateInfo?.status === 'downloaded'
   const updateInProgress = updateInfo?.status === 'downloading'
+  const releaseNotes = updateInfo?.releaseNotes?.trim() ?? ''
+  const dreamApps = [
+    {
+      name: text.about.dreamCreator,
+      description: text.about.dreamCreatorDescription,
+      url: 'https://dreamcreator.dreamapp.cc/',
+      iconUrl: dreamCreatorIconUrl
+    },
+    {
+      name: text.about.xiaDown,
+      description: text.about.xiaDownDescription,
+      url: 'https://xiadown.dreamapp.cc/',
+      iconUrl: xiaDownIconUrl
+    }
+  ]
+
+  useEffect(() => {
+    if (!releaseNotesOpen) {
+      return
+    }
+
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setReleaseNotesOpen(false)
+      }
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [releaseNotesOpen])
 
   return (
     <div className="settings-stack">
@@ -843,9 +875,14 @@ function AboutTab(props: {
         </SettingsRow>
         <SettingsSeparator />
         <SettingsRow label={text.about.releaseNotes}>
-          <span className="muted-text">
-            {updateInfo?.releaseNotes || text.about.noReleaseNotes}
-          </span>
+          <button
+            className="secondary-button release-notes-trigger"
+            type="button"
+            onClick={() => setReleaseNotesOpen(true)}
+          >
+            <Info size={15} />
+            {text.about.viewReleaseNotes}
+          </button>
         </SettingsRow>
         <SettingsSeparator />
         <SettingsRow label={text.about.updateStatus}>
@@ -934,8 +971,294 @@ function AboutTab(props: {
           </IconButton>
         </SettingsRow>
       </SettingsCard>
+
+      <div className="dream-app-section">
+        <div className="dream-app-title">{text.about.dreamApp}</div>
+        <SettingsCard contentClassName="dream-app-card">
+          {dreamApps.map((app, index) => (
+            <div
+              className={index > 0 ? 'dream-app-item has-border' : 'dream-app-item'}
+              key={app.name}
+            >
+              <div className="dream-app-icon" aria-hidden="true">
+                <img src={app.iconUrl} alt="" />
+              </div>
+              <div className="dream-app-copy">
+                <div className="dream-app-name">{app.name}</div>
+                <div className="dream-app-description">{app.description}</div>
+              </div>
+              <button
+                className="secondary-button dream-app-link"
+                type="button"
+                onClick={() => void window.api.openExternal(app.url)}
+              >
+                <Globe size={15} />
+                {text.about.website}
+              </button>
+            </div>
+          ))}
+        </SettingsCard>
+      </div>
+
+      {releaseNotesOpen ? (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={() => setReleaseNotesOpen(false)}
+        >
+          <section
+            className="dialog-panel release-notes-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="release-notes-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="dialog-header">
+              <h2 id="release-notes-title">{text.about.releaseNotes}</h2>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setReleaseNotesOpen(false)}
+                title={text.actions.close}
+                aria-label={text.actions.close}
+              >
+                x
+              </button>
+            </header>
+            <div className="release-notes-body">
+              <MarkdownContent markdown={releaseNotes || text.about.noReleaseNotes} />
+            </div>
+            <footer className="dialog-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setReleaseNotesOpen(false)}
+              >
+                {text.actions.close}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </div>
   )
+}
+
+type MarkdownBlock =
+  | { type: 'code'; content: string }
+  | { type: 'heading'; level: number; content: string }
+  | { type: 'list'; ordered: boolean; items: string[] }
+  | { type: 'paragraph'; content: string }
+  | { type: 'quote'; content: string }
+  | { type: 'rule' }
+
+function MarkdownContent(props: { markdown: string }): JSX.Element {
+  const blocks = parseMarkdownBlocks(props.markdown)
+
+  return (
+    <div className="markdown-content">
+      {blocks.map((block, index) => {
+        const key = `markdown-block-${index}`
+        if (block.type === 'heading') {
+          const HeadingTag = `h${Math.min(block.level, 4)}` as keyof JSX.IntrinsicElements
+          return <HeadingTag key={key}>{renderMarkdownInline(block.content, key)}</HeadingTag>
+        }
+        if (block.type === 'list') {
+          const ListTag = block.ordered ? 'ol' : 'ul'
+          return (
+            <ListTag key={key}>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${key}-${itemIndex}`}>
+                  {renderMarkdownInline(item, `${key}-${itemIndex}`)}
+                </li>
+              ))}
+            </ListTag>
+          )
+        }
+        if (block.type === 'code') {
+          return (
+            <pre key={key}>
+              <code>{block.content}</code>
+            </pre>
+          )
+        }
+        if (block.type === 'quote') {
+          return <blockquote key={key}>{renderMarkdownInline(block.content, key)}</blockquote>
+        }
+        if (block.type === 'rule') {
+          return <hr key={key} />
+        }
+        return <p key={key}>{renderMarkdownInline(block.content, key)}</p>
+      })}
+    </div>
+  )
+}
+
+function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n')
+  const blocks: MarkdownBlock[] = []
+  let index = 0
+
+  while (index < lines.length) {
+    const line = lines[index]
+    const trimmed = line.trim()
+
+    if (!trimmed) {
+      index += 1
+      continue
+    }
+
+    if (trimmed.startsWith('```')) {
+      const codeLines: string[] = []
+      index += 1
+      while (index < lines.length && !lines[index].trim().startsWith('```')) {
+        codeLines.push(lines[index])
+        index += 1
+      }
+      blocks.push({ type: 'code', content: codeLines.join('\n') })
+      index += index < lines.length ? 1 : 0
+      continue
+    }
+
+    const headingMatch = /^(#{1,4})\s+(.+)$/.exec(trimmed)
+    if (headingMatch) {
+      blocks.push({
+        type: 'heading',
+        level: headingMatch[1].length,
+        content: headingMatch[2].trim()
+      })
+      index += 1
+      continue
+    }
+
+    if (/^[-*_]{3,}$/.test(trimmed)) {
+      blocks.push({ type: 'rule' })
+      index += 1
+      continue
+    }
+
+    const quoteMatch = /^>\s?(.+)$/.exec(trimmed)
+    if (quoteMatch) {
+      const quoteLines = [quoteMatch[1].trim()]
+      index += 1
+      while (index < lines.length) {
+        const nextQuoteMatch = /^>\s?(.+)$/.exec(lines[index].trim())
+        if (!nextQuoteMatch) {
+          break
+        }
+        quoteLines.push(nextQuoteMatch[1].trim())
+        index += 1
+      }
+      blocks.push({ type: 'quote', content: quoteLines.join(' ') })
+      continue
+    }
+
+    const listMatch = /^((?:[-*+])|(?:\d+[.)]))\s+(.+)$/.exec(trimmed)
+    if (listMatch) {
+      const ordered = /^\d/.test(listMatch[1])
+      const items = [listMatch[2].trim()]
+      index += 1
+      while (index < lines.length) {
+        const nextListMatch = /^((?:[-*+])|(?:\d+[.)]))\s+(.+)$/.exec(lines[index].trim())
+        if (!nextListMatch || /^\d/.test(nextListMatch[1]) !== ordered) {
+          break
+        }
+        items.push(nextListMatch[2].trim())
+        index += 1
+      }
+      blocks.push({ type: 'list', ordered, items })
+      continue
+    }
+
+    const paragraphLines = [trimmed]
+    index += 1
+    while (index < lines.length) {
+      const nextTrimmed = lines[index].trim()
+      if (
+        !nextTrimmed ||
+        nextTrimmed.startsWith('```') ||
+        /^(#{1,4})\s+/.test(nextTrimmed) ||
+        /^((?:[-*+])|(?:\d+[.)]))\s+/.test(nextTrimmed) ||
+        /^>\s?(.+)$/.test(nextTrimmed) ||
+        /^[-*_]{3,}$/.test(nextTrimmed)
+      ) {
+        break
+      }
+      paragraphLines.push(nextTrimmed)
+      index += 1
+    }
+    blocks.push({ type: 'paragraph', content: paragraphLines.join(' ') })
+  }
+
+  return blocks
+}
+
+function renderMarkdownInline(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = []
+  const tokenPattern = /(\[[^\]]+\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = tokenPattern.exec(text))) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index))
+    }
+
+    const token = match[0]
+    const key = `${keyPrefix}-${match.index}`
+    const linkMatch = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token)
+    if (linkMatch) {
+      const href = normalizeReleaseNotesHref(linkMatch[2])
+      nodes.push(
+        href ? (
+          <a
+            key={key}
+            href={href}
+            onClick={(event) => {
+              event.preventDefault()
+              void window.api.openExternal(href)
+            }}
+          >
+            {renderMarkdownInline(linkMatch[1], `${key}-label`)}
+          </a>
+        ) : (
+          linkMatch[1]
+        )
+      )
+    } else if (token.startsWith('`')) {
+      nodes.push(<code key={key}>{token.slice(1, -1)}</code>)
+    } else if (token.startsWith('**') || token.startsWith('__')) {
+      nodes.push(
+        <strong key={key}>{renderMarkdownInline(token.slice(2, -2), `${key}-strong`)}</strong>
+      )
+    } else {
+      nodes.push(<em key={key}>{renderMarkdownInline(token.slice(1, -1), `${key}-em`)}</em>)
+    }
+
+    lastIndex = tokenPattern.lastIndex
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex))
+  }
+
+  return nodes
+}
+
+function normalizeReleaseNotesHref(href: string): string {
+  try {
+    const parsed = new URL(href.trim())
+    if (
+      parsed.protocol === 'https:' ||
+      parsed.protocol === 'http:' ||
+      parsed.protocol === 'mailto:'
+    ) {
+      return parsed.toString()
+    }
+  } catch {
+    return ''
+  }
+  return ''
 }
 
 function SettingsCard(props: { children: ReactNode; contentClassName?: string }): JSX.Element {
