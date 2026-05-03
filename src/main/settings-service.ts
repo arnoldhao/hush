@@ -911,12 +911,32 @@ function normalizeReleaseNotes(releaseNotes: unknown): string {
 }
 
 function stripReleaseNotesBoilerplate(releaseNotes: string): string {
-  return releaseNotes
-    .replace(/\r\n?/g, '\n')
+  const normalized = releaseNotes.replace(/\r\n?/g, '\n')
+  if (isHtmlReleaseNotes(normalized)) {
+    return stripHtmlReleaseNotesBoilerplate(normalized)
+  }
+
+  return normalized
     .replace(
       /<!--\s*hush-release-header:start\s*-->[\s\S]*?<!--\s*hush-release-header:end\s*-->/gi,
       ''
     )
     .replace(/^\s*##\s+版本变更\s*\/\s*Changelog\s*\n+/i, '')
     .trim()
+}
+
+function isHtmlReleaseNotes(releaseNotes: string): boolean {
+  return /<\/?(?:h[1-6]|p|ul|ol|li|a|code|pre|blockquote|table|thead|tbody|tr|th|td|hr|br|strong|em)\b/i.test(
+    releaseNotes
+  )
+}
+
+function stripHtmlReleaseNotesBoilerplate(releaseNotes: string): string {
+  const changelogHeading = /<h[1-6]\b[^>]*>\s*版本变更\s*\/\s*Changelog\s*<\/h[1-6]>/i.exec(
+    releaseNotes
+  )
+  if (changelogHeading) {
+    return releaseNotes.slice(changelogHeading.index + changelogHeading[0].length).trim()
+  }
+  return releaseNotes.trim()
 }
