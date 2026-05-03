@@ -74,7 +74,10 @@ jobs:
         run: npx electron-builder --mac --universal --publish never
 
       - name: Verify native module
-        run: node scripts/verify-native-module.mjs darwin universal
+        run: node scripts/verify-native-module.mjs darwin universal dist/mac-universal/Hush.app
+
+      - name: Verify macOS signing
+        run: npm run verify:macos-signing -- dist/mac-universal/Hush.app
 
       - name: Inspect macOS build metadata
         shell: bash

@@ -76,6 +76,9 @@ const VIDEO_PLAYER_FRAME_MARGIN_BOTTOM = 10
 const VIDEO_PLAYER_ASPECT_RATIO = 16 / 9
 const VIDEO_PLAYER_MIN_CONTENT_HEIGHT = 260
 const TRAY_ICON_SIZE = process.platform === 'darwin' ? 18 : 16
+const MENU_ICON_SIZE = 16
+const SETTINGS_MENU_ICON_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA10lEQVR42t1X0Q3EIAjtKI7SERzBUdykoziCIziCI3h+cIkxnqJH+mxJXppoC0+ggMfxYDkzEj0h4oiAQxFIBW4XXRHQ0gZiRsgwxZrKsLSeGgi0r4pvDK3HWQKlEU+K4w/DNSK97ytyU2KYxrgwK2HwQsb9ah5YIQJ2xbiaiDknJ5T06S+qgF9c0l4IC8p6pMM/RaY+eU96ntCjxuIY8Rw1npOhw7X0cBNKgkCzf8A9AM+Brf6CLeoAvBLCewG8G8LnAfhEBJ8J4VPx9veCLW5G8LvhO+QDSTx+3HSPDdAAAAAASUVORK5CYII='
 const TRAY_SINGLE_CLICK_DELAY_MS = 120
 const WINDOWS_TITLE_BAR_OVERLAY_COLOR = 'rgba(0, 0, 0, 0)'
 const ALLOWED_EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
@@ -113,6 +116,7 @@ let shouldShowTrayPreviewWhenReady = false
 let pendingTrayPreviewBounds: Electron.Rectangle | undefined
 let traySingleClickTimer: ReturnType<typeof setTimeout> | null = null
 const windowBoundsSaveTimers = new Map<'main' | 'settings', ReturnType<typeof setTimeout>>()
+let settingsMenuIcon: NativeImage | undefined
 
 function configureAppIdentity(): void {
   app.setName(APP_DISPLAY_NAME)
@@ -977,6 +981,7 @@ function createTrayMenu(settings: AppSettings): Menu {
     },
     {
       label: text.tray.settings,
+      icon: getSettingsMenuIcon(),
       click: () => showSettingsWindow('general')
     },
     { type: 'separator' },
@@ -993,6 +998,33 @@ function createTrayMenu(settings: AppSettings): Menu {
       }
     }
   ])
+}
+
+function getSettingsMenuIcon(): NativeImage | undefined {
+  if (settingsMenuIcon) {
+    return settingsMenuIcon
+  }
+
+  const systemIcon =
+    process.platform === 'darwin' ? nativeImage.createFromNamedImage('gearshape') : undefined
+  const source =
+    systemIcon && !systemIcon.isEmpty()
+      ? systemIcon
+      : nativeImage.createFromDataURL(SETTINGS_MENU_ICON_DATA_URL)
+
+  if (source.isEmpty()) {
+    return undefined
+  }
+
+  settingsMenuIcon = source.resize({
+    width: MENU_ICON_SIZE,
+    height: MENU_ICON_SIZE,
+    quality: 'best'
+  })
+  if (process.platform === 'darwin') {
+    settingsMenuIcon.setTemplateImage(true)
+  }
+  return settingsMenuIcon
 }
 
 function createTrayIcon(): NativeImage {
@@ -1767,6 +1799,7 @@ function createApplicationMenu(settings: AppSettings): Menu {
     {
       label: menu.settings,
       accelerator: 'CommandOrControl+,',
+      icon: getSettingsMenuIcon(),
       click: () => showSettingsWindow('general')
     }
   ]

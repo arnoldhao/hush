@@ -16,6 +16,7 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "build:dmg-background": "electron scripts/render-dmg-background.mjs",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win --x64",
@@ -25,7 +26,8 @@
     "build:mac:x64": "npm run build && electron-builder --mac --x64",
     "build:mac:universal": "npm run build && electron-builder --mac --universal",
     "build:linux": "npm run build && electron-builder --linux",
-    "build:publish": "npm run build && electron-builder --publish always"
+    "build:publish": "npm run build && electron-builder --publish always",
+    "verify:macos-signing": "node scripts/verify-macos-signing.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

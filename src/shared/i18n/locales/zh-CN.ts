@@ -126,6 +126,7 @@ export const zhCN = {
     downloadProgress: '下载进度',
     updateReady: '可重启安装',
     releaseNotes: '发布说明',
+    viewReleaseNotes: '查看发布说明',
     noReleaseNotes: '暂无发布说明',
     craftedBy: '作者',
     contact: '联系',
@@ -133,7 +134,12 @@ export const zhCN = {
     email: '邮件',
     website: '网站',
     github: 'GitHub',
-    sendFeedback: '提交反馈'
+    sendFeedback: '提交反馈',
+    dreamApp: 'DreamApp',
+    dreamCreator: 'DreamCreator / 追创作',
+    dreamCreatorDescription: '一款为创作者打造的 AI 助手',
+    xiaDown: 'XiaDown / 下蛋',
+    xiaDownDescription: '一款支持在线音乐的视频下载工具'
   },
   live: {
     audioMode: '音频模式',

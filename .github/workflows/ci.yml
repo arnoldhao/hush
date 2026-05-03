@@ -53,6 +53,7 @@ jobs:
             arch: universal
             artifact_name: preview-macos-universal
             artifact_suffix: macos-universal
+            app_path: dist/mac-universal/Hush.app
           - runner: windows-latest
             platform: windows
             arch: x64
@@ -93,7 +94,11 @@ jobs:
 
       - name: Verify native module (macOS)
         if: matrix.platform == 'macos'
-        run: node scripts/verify-native-module.mjs darwin ${{ matrix.arch }}
+        run: node scripts/verify-native-module.mjs darwin ${{ matrix.arch }} ${{ matrix.app_path }}
+
+      - name: Verify macOS signing
+        if: matrix.platform == 'macos'
+        run: npm run verify:macos-signing -- ${{ matrix.app_path }}
 
       - name: Verify native module (Windows)
         if: matrix.platform == 'windows'

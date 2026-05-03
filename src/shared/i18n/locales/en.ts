@@ -126,6 +126,7 @@ export const en = {
     downloadProgress: 'Download',
     updateReady: 'Ready to install',
     releaseNotes: 'Release Notes',
+    viewReleaseNotes: 'View Release Notes',
     noReleaseNotes: 'No release notes',
     craftedBy: 'Crafted By',
     contact: 'Contact',
@@ -133,7 +134,12 @@ export const en = {
     email: 'Email',
     website: 'Website',
     github: 'GitHub',
-    sendFeedback: 'Send Feedback'
+    sendFeedback: 'Send Feedback',
+    dreamApp: 'DreamApp',
+    dreamCreator: 'DreamCreator / 追创作',
+    dreamCreatorDescription: 'An AI assistant built for creators',
+    xiaDown: 'XiaDown / 下蛋',
+    xiaDownDescription: 'A video download tool with online music support'
   },
   live: {
     audioMode: 'Audio Mode',
