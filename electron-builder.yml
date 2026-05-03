@@ -30,7 +30,7 @@ nsis:
   perMachine: true
   allowToChangeInstallationDirectory: true
   runAfterFinish: false
-  menuCategory: Hush
+  menuCategory: DreamApp
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
