@@ -84,8 +84,33 @@ jobs:
       - name: Build app
         run: npm run build
 
+      - name: Validate preview macOS signing secrets
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$CSC_LINK" || { echo "::error::Missing MAC_CSC_LINK secret"; exit 1; }
+          test -n "$CSC_KEY_PASSWORD" || { echo "::error::Missing MAC_CSC_KEY_PASSWORD secret"; exit 1; }
+          test -n "$APPLE_ID" || { echo "::error::Missing APPLE_ID secret"; exit 1; }
+          test -n "$APPLE_APP_SPECIFIC_PASSWORD" || { echo "::error::Missing APPLE_APP_SPECIFIC_PASSWORD secret"; exit 1; }
+          test -n "$APPLE_TEAM_ID" || { echo "::error::Missing APPLE_TEAM_ID secret"; exit 1; }
+
       - name: Package preview app (macOS)
         if: matrix.platform == 'macos'
+        timeout-minutes: 45
+        env:
+          DEBUG: electron-builder,electron-osx-sign*,electron-notarize*
+          CSC_FOR_PULL_REQUEST: true
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --mac --${{ matrix.arch }} --publish never
 
       - name: Package preview app (Windows)
@@ -98,7 +123,14 @@ jobs:
 
       - name: Verify macOS signing
         if: matrix.platform == 'macos'
-        run: npm run verify:macos-signing -- ${{ matrix.app_path }}
+        run: npm run verify:macos-signing -- --require-developer-id ${{ matrix.app_path }}
+
+      - name: Verify macOS notarization
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          xcrun stapler validate ${{ matrix.app_path }}
+          spctl --assess --type execute --verbose=4 ${{ matrix.app_path }}
 
       - name: Verify native module (Windows)
         if: matrix.platform == 'windows'
