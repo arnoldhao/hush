@@ -41,7 +41,7 @@ mac:
   artifactName: ${name}-macos-${arch}-${version}.${ext}
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  notarize: false
+  notarize: true
 dmg:
   artifactName: ${name}-macos-${arch}-${version}.${ext}
   background: build/dmg-background.png
@@ -74,6 +74,5 @@ appImage:
   artifactName: ${name}-linux-${arch}-${version}.${ext}
 npmRebuild: true
 publish:
-  provider: github
-  owner: arnoldhao
-  repo: hush
+  provider: generic
+  url: https://updates.dreamapp.cc/hush/downloads

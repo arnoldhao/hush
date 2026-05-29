@@ -3,22 +3,40 @@ name: Publish Release
 on:
   workflow_dispatch:
 
+env:
+  NODE_VERSION: '22'
+
 jobs:
-  publish:
+  prepare_release:
+    name: Prepare draft release
     permissions:
       contents: write
       pull-requests: read
       issues: read
     runs-on: ubuntu-24.04
+    outputs:
+      release_id: ${{ steps.release_drafter.outputs.id }}
+      tag_name: ${{ steps.release_drafter.outputs.tag_name }}
+      version: ${{ steps.release_info.outputs.version }}
     steps:
       - name: Release Drafter
         id: release_drafter
         uses: release-drafter/release-drafter@v6
         with:
-          publish: true
+          publish: false
           commitish: ${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate release metadata
+        id: release_info
+        shell: bash
+        run: |
+          release_id="${{ steps.release_drafter.outputs.id }}"
+          tag_name="${{ steps.release_drafter.outputs.tag_name }}"
+          test -n "$release_id" || { echo "::error::Release Drafter did not return a release id"; exit 1; }
+          test -n "$tag_name" || { echo "::error::Release Drafter did not return a tag name"; exit 1; }
+          echo "version=${tag_name#v}" >> "$GITHUB_OUTPUT"
 
       - name: Enrich release notes with PR descriptions
         if: ${{ steps.release_drafter.outputs.id != '' && steps.release_drafter.outputs.body != '' }}
@@ -204,3 +222,217 @@ jobs:
 
           console.log(`Enriched release notes with PR descriptions for ${detailLinesByPr.size} pull request(s).`);
           NODE
+
+  release-macos:
+    name: Build macOS artifacts
+    needs: prepare_release
+    runs-on: macos-26
+    env:
+      TELEMETRYDECK_APP_ID: ${{ secrets.TELEMETRYDECK_APP_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Sync package version
+        run: npm version "${{ needs.prepare_release.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Validate macOS signing secrets
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$CSC_LINK" || { echo "::error::Missing MAC_CSC_LINK secret"; exit 1; }
+          test -n "$CSC_KEY_PASSWORD" || { echo "::error::Missing MAC_CSC_KEY_PASSWORD secret"; exit 1; }
+          test -n "$APPLE_ID" || { echo "::error::Missing APPLE_ID secret"; exit 1; }
+          test -n "$APPLE_APP_SPECIFIC_PASSWORD" || { echo "::error::Missing APPLE_APP_SPECIFIC_PASSWORD secret"; exit 1; }
+          test -n "$APPLE_TEAM_ID" || { echo "::error::Missing APPLE_TEAM_ID secret"; exit 1; }
+
+      - name: Package app (macOS)
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder --mac --universal --publish never
+
+      - name: Verify native module
+        run: node scripts/verify-native-module.mjs darwin universal dist/mac-universal/Hush.app
+
+      - name: Verify macOS signing
+        run: npm run verify:macos-signing -- --require-developer-id dist/mac-universal/Hush.app
+
+      - name: Verify macOS notarization
+        shell: bash
+        run: |
+          xcrun stapler validate dist/mac-universal/Hush.app
+          spctl --assess --type execute --verbose=4 dist/mac-universal/Hush.app
+
+      - name: Inspect macOS build metadata
+        shell: bash
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --show-sdk-version --sdk macosx
+          find dist -maxdepth 1 -type f -print
+
+      - name: SHA256
+        shell: bash
+        run: |
+          find dist -maxdepth 1 -type f -print0 | while IFS= read -r -d '' file; do
+            shasum -a 256 "$file" > "$file.sha256"
+          done
+
+      - name: List dist artifacts
+        shell: bash
+        run: ls -la dist
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts-universal
+          path: dist/*
+          if-no-files-found: error
+
+  release-windows:
+    name: Build Windows artifacts
+    needs: prepare_release
+    runs-on: windows-latest
+    env:
+      TELEMETRYDECK_APP_ID: ${{ secrets.TELEMETRYDECK_APP_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Sync package version
+        run: npm version "$env:VERSION" --no-git-tag-version --allow-same-version
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.prepare_release.outputs.version }}
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Package app (Windows)
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Verify native module
+        run: node scripts/verify-native-module.mjs win32 x64
+
+      - name: SHA256
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -FilePath "$($_.FullName).sha256" -Encoding ascii -NoNewline
+          }
+
+      - name: List dist artifacts
+        shell: pwsh
+        run: Get-ChildItem dist | Format-Table Name,Length,LastWriteTime
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: dist/*
+          if-no-files-found: error
+
+  publish_release:
+    name: Publish release after assets
+    needs:
+      - prepare_release
+      - release-macos
+      - release-windows
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        shell: bash
+        run: find release-assets -maxdepth 1 -type f -print | sort
+
+      - name: Verify required release assets
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare_release.outputs.version }}
+        run: |
+          required=(
+            "hush-macos-universal-$VERSION.dmg"
+            "hush-macos-universal-$VERSION.zip"
+            "hush-macos-universal-$VERSION.zip.blockmap"
+            "hush-windows-x64-$VERSION-setup.exe"
+            "hush-windows-x64-$VERSION-setup.exe.blockmap"
+            "latest-mac.yml"
+            "latest.yml"
+          )
+
+          for asset in "${required[@]}"; do
+            test -f "release-assets/$asset" || { echo "::error::Missing release asset: $asset"; exit 1; }
+          done
+
+      - name: Clear existing draft assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare_release.outputs.tag_name }}
+        run: |
+          is_draft="$(gh release view "$TAG_NAME" --json isDraft --jq '.isDraft' --repo "$GITHUB_REPOSITORY")"
+          test "$is_draft" = "true" || { echo "::error::Release $TAG_NAME is not a draft"; exit 1; }
+
+          mapfile -t existing_assets < <(gh release view "$TAG_NAME" --json assets --jq '.assets[].name' --repo "$GITHUB_REPOSITORY")
+          for asset in "${existing_assets[@]}"; do
+            gh release delete-asset "$TAG_NAME" "$asset" --yes --repo "$GITHUB_REPOSITORY"
+          done
+
+      - name: Upload assets to draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare_release.outputs.tag_name }}
+        run: |
+          mapfile -d '' files < <(find release-assets -maxdepth 1 -type f -print0)
+          test "${#files[@]}" -gt 0 || { echo "::error::No release assets found"; exit 1; }
+          gh release upload "$TAG_NAME" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Publish draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare_release.outputs.tag_name }}
+        run: gh release edit "$TAG_NAME" --draft=false --repo "$GITHUB_REPOSITORY"

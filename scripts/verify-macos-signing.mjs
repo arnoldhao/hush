@@ -4,7 +4,18 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-const [, , appPathArg = 'dist/mac-universal/Hush.app'] = process.argv
+const args = process.argv.slice(2)
+const supportedFlags = new Set(['--require-developer-id'])
+
+for (const arg of args) {
+  if (arg.startsWith('--') && !supportedFlags.has(arg)) {
+    console.error(`Unknown option: ${arg}`)
+    process.exit(2)
+  }
+}
+
+const requireDeveloperId = args.includes('--require-developer-id')
+const appPathArg = args.find((arg) => !arg.startsWith('--')) ?? 'dist/mac-universal/Hush.app'
 const appPath = isAbsolute(appPathArg) ? appPathArg : join(process.cwd(), appPathArg)
 
 if (process.platform !== 'darwin') {
@@ -18,6 +29,28 @@ if (!existsSync(appPath)) {
 }
 
 run('codesign', ['--verify', '--deep', '--strict', '--verbose=4', appPath], { capture: true })
+
+if (requireDeveloperId) {
+  const signatureInfo = run('codesign', ['-dv', '--verbose=4', appPath], {
+    capture: true,
+    includeStderr: true
+  })
+
+  if (/Signature=adhoc/.test(signatureInfo)) {
+    console.error('App bundle is ad-hoc signed, not Developer ID signed')
+    process.exit(1)
+  }
+
+  if (!signatureInfo.includes('Authority=Developer ID Application:')) {
+    console.error('App bundle is not signed with a Developer ID Application certificate')
+    process.exit(1)
+  }
+
+  if (!/TeamIdentifier=\S+/.test(signatureInfo)) {
+    console.error('App bundle signature is missing a TeamIdentifier')
+    process.exit(1)
+  }
+}
 
 const entitlements = run('codesign', ['-d', '--entitlements', ':-', appPath], { capture: true })
 const requiredEntitlements = [
@@ -72,7 +105,7 @@ function run(command, args, options = {}) {
   }
 
   if (options.capture) {
-    return result.stdout
+    return `${result.stdout}${options.includeStderr ? result.stderr : ''}`
   }
 
   if (result.stdout) process.stdout.write(result.stdout)
