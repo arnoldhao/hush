@@ -266,7 +266,9 @@ jobs:
           test -n "$APPLE_TEAM_ID" || { echo "::error::Missing APPLE_TEAM_ID secret"; exit 1; }
 
       - name: Package app (macOS)
+        timeout-minutes: 45
         env:
+          DEBUG: electron-builder,electron-osx-sign*,electron-notarize*
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
